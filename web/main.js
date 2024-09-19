@@ -1,3 +1,4 @@
+import { BankFilter } from "./components/bankFilter.js";
 import { AG_GRID_LOCALE_VN } from "./lib/ag_grid_vi.js";
 
 const loadingDiv = document.querySelector("#loading");
@@ -9,7 +10,8 @@ const dataSelect = document.querySelector("#data-select");
 const fetchDataBtn = document.querySelector("#fetch-data-btn");
 const tableEle = document.querySelector("#myTable");
 
-const maxDate = 14;
+const maxDate = 15;
+const fetchCacheKey = Date.now();
 
 let darkMode = false;
 const allAgChart = {},
@@ -80,6 +82,7 @@ async function initSelect() {
         "MTTQ_BIDV_1-12",
         "MTTQ_Agribank_9-13",
         "CTTU_Vietinbank_10-12",
+        "CTTU_Vietinbank_13-15",
       ],
     },
   ].forEach((d) => {
@@ -102,6 +105,7 @@ async function initSelect() {
   // fetch file size
   const options = dataSelect.querySelectorAll("option");
   loadingDiv.innerHTML = "Đang tải kích thước file...";
+  fetchDataBtn.disabled = true;
   await Promise.all(
     Array.from(options).map(async (o) => {
       const res = await fetch(o.value, {
@@ -112,11 +116,12 @@ async function initSelect() {
       o.innerHTML += ` (${size})`;
     })
   );
+  fetchDataBtn.disabled = false;
   loadingDiv.innerHTML = "Vui lòng chọn dữ liệu muốn xem. Rồi bấm Tải";
 
   fetchDataBtn.addEventListener("click", () => {
     fetchDataBtn.disabled = true;
-    fetchData(dataSelect.value + "?v=" + Date.now())
+    fetchData(dataSelect.value + "?v=" + fetchCacheKey)
       .then(() => {})
       .catch((err) => {
         alert("ERROR: " + err);
@@ -132,11 +137,15 @@ async function fetchData(filePath) {
   loadingDiv.style.display = "block";
 
   // fetch data
-  const response = await getBlobFromUrlWithProgress(filePath, (progress) => {
-    loadingDiv.innerHTML = `Đang tải dữ liêu... ${formatSize(
-      progress.loaded
-    )}/${formatSize(progress.total)} (${formatSize(progress.speed)}/s)`;
-  });
+  const response = await getBlobFromUrlWithProgress(
+    filePath,
+    {},
+    (progress) => {
+      loadingDiv.innerHTML = `Đang tải dữ liêu... ${formatSize(
+        progress.loaded
+      )}/${formatSize(progress.total)} (${formatSize(progress.speed)}/s)`;
+    }
+  );
   loadingDiv.innerHTML = "Tải xong. Đang giải nén dữ liệu...";
   const compressedData = new Uint8Array(await response.arrayBuffer());
   const content = pako.inflate(compressedData, { to: "string" });
@@ -149,6 +158,7 @@ async function fetchData(filePath) {
     const line = lines[i];
     const parts = line.split(",");
     transactions.push({
+      index: i,
       date: parts[0],
       bank: parts[1],
       id: parts[2],
@@ -166,11 +176,16 @@ async function fetchData(filePath) {
   } else {
     gridApi = agGrid.createGrid(tableEle, {
       localeText: AG_GRID_LOCALE_VN,
-      pagination: true,
       enableCellTextSelection: true,
       suppressDragLeaveHidesColumns: true,
       rowData: transactions,
       columnDefs: [
+        {
+          field: "index",
+          headerName: "#",
+          width: 80,
+          filter: false,
+        },
         {
           field: "date",
           headerName: "Ngày",
@@ -201,6 +216,7 @@ async function fetchData(filePath) {
           field: "bank",
           headerName: "Bank",
           width: 100,
+          filter: BankFilter,
         },
         {
           field: "id",
@@ -493,8 +509,8 @@ function drawSummary(trans, allTrans) {
   // });
 }
 
-async function getBlobFromUrlWithProgress(url, progressCallback) {
-  const response = await fetch(url, {});
+async function getBlobFromUrlWithProgress(url, options, progressCallback) {
+  const response = await fetch(url, options);
   if (!response.ok) {
     throw new Error(`Error: ${response.status} - ${response.statusText}`);
   }
