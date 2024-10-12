@@ -10,7 +10,7 @@ const dataSelect = document.querySelector("#data-select");
 const fetchDataBtn = document.querySelector("#fetch-data-btn");
 const tableEle = document.querySelector("#myTable");
 
-const maxDate = 15;
+const maxDate = 19;
 const fetchCacheKey = Date.now();
 
 let darkMode = false;
@@ -58,6 +58,7 @@ async function initSelect() {
   // create select
   [
     { label: "Toàn bộ dữ liệu", value: "all" },
+    { label: "Top 5000 giao dịch cao nhất", value: "top/topMoney" },
     {
       group: "Theo ngân hàng",
       prefix: "byBank",
@@ -80,9 +81,13 @@ async function initSelect() {
         "MTTQ_VCB_13",
         "MTTQ_VCB_14",
         "MTTQ_BIDV_1-12",
+        "MTTQ_BIDV_10-17",
+        "MTTQ_BIDV_18-19",
         "MTTQ_Agribank_9-13",
         "CTTU_Vietinbank_10-12",
         "CTTU_Vietinbank_13-15",
+        "CTTU_Vietinbank_16",
+        "CTTU_Vietinbank_17",
       ],
     },
   ].forEach((d) => {

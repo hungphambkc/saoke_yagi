@@ -24,24 +24,18 @@ async function main() {
     ...(await MTTQ_VCB_13()),
     ...(await MTTQ_VCB_14()),
     ...(await MTTQ_BIDV_1_12()),
+    ...(await MTTQ_BIDV_10_17()),
+    ...(await MTTQ_BIDV_18_19()),
     ...(await MTTQ_Agribank_9_13()),
     ...(await CTTU_Vietinbank_10_12()),
     ...(await CTTU_Vietinbank_13_15()),
+    ...(await CTTU_Vietinbank_16()),
+    ...(await CTTU_Vietinbank_17()),
   ]
     // sort by date
     .sort((a, b) => a.date.localeCompare(b.date))
     // shorten date
-    .map((_) => ({
-      ..._,
-      desc: _.desc
-        .trim()
-        .replace(/\s+/g, " ") // "  " => " "
-        .replace(/^\"(.*)\"$/, "$1"), // "abc" => abc
-      // 01/09/2024 -> 1/9
-      date: _.date
-        // .replace(/0(\d\/)/g, "$1")
-        .replace("/2024", ""),
-    }));
+    .map(cleanData);
 
   // Save all
   const outputPath = "./data/output/";
@@ -67,7 +61,7 @@ async function main() {
 
   // Save by date
   console.log("Saving " + allTrans.length + " transactions by date...");
-  const dates = [...new Set(allTrans.map((_) => _.date.split(" ")[0]))];
+  const dates = [...new Set(allTrans.map((_) => _.date.trim().split(" ")[0]))];
   console.log(dates);
   for (const date of dates) {
     const trans = allTrans.filter((_) => _.date.startsWith(date));
@@ -81,6 +75,14 @@ async function main() {
     const trans = allTrans.filter((_) => _.bank === bank);
     saveTransactions(trans, outputPath + "byBank/" + bank);
   }
+
+  // Save top money
+  const topLength = 5000;
+  const topMoney = [...allTrans]
+    .sort((a, b) => b.money - a.money)
+    .slice(0, topLength);
+  console.log("Saving " + topMoney.length + " top money transactions...");
+  saveTransactions(topMoney, outputPath + "top/topMoney");
 }
 main();
 
@@ -313,6 +315,135 @@ async function MTTQ_BIDV_1_12(
   return transactions;
 }
 
+async function MTTQ_BIDV_10_17(
+  pdfPath = "./data/input/MTTQ_BIDV_10-17.pdf",
+  outputPath = "./data/output/byFile/MTTQ_BIDV_10-17"
+) {
+  const rows = await getPDF(pdfPath, outputPath);
+
+  console.log("Parsing transactions..." + rows.length);
+  const transactions = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (!Array.isArray(rows[i])) continue;
+    /*[
+      "17",
+      "10/09/2024 0:55:10",
+      "0091000639xxx",
+      "400.000,00",
+      "TKThe :0091000639xxx, tai VCB. MBVCB.6988293532.235166.cam nhung ung ho ba con lu lut.CT tu 0091000639xxx TRAN THI CAM NHUNG toi 1261122666 UBTW MTTQ VIET NAM tai BIDV -CTLNHIDI000009811425241-1/1-CRE-002; thoi gian GD:09/09/2024 23:"
+    ]
+    [
+      '10119',
+      '16/09/2024 9:27:00',
+      '2.000.000,00',
+      '185 BINH LONG NGUOI GUI NGUYEN THANH NHAN CUU TRO LU LUT'
+    ]
+    [
+      "10685",
+      "17/09/2024 23:12:53",
+      "7500539xxx",
+      "200.000,001261122666 ung ho mien Bac"
+    ] */
+    const [index] = rows[i]?.[0]?.match(/^(\d+)$/) || [];
+    const [date] =
+      rows[i]?.[1]?.match(/^[0-1][0-9]\/09\/2024 (\d{1,}:\d{1,}:\d{1,})$/) ||
+      [];
+    const money =
+      [2, 3]
+        .map(
+          (j) =>
+            rows[i]?.[j]?.split(",")?.[0].match(/(\d{1,3}(?:\.\d{3})*)$/)?.[0]
+        )
+        .find((_) => _) || 0;
+    const moneyAt2 = rows[i]?.[2]?.startsWith?.(money);
+    const descAt3 = rows[i]?.[3]?.startsWith?.(money)
+      ? rows[i][3].split(",00")[1]
+      : "";
+
+    if (date && index && money) {
+      const descs = moneyAt2
+        ? [descAt3, ...rows[i].slice(3)]
+        : [descAt3, rows[i][2], ...rows[i].slice(4)];
+      if (descs.length > 0 || money) {
+        transactions.push({
+          date,
+          bank: "BIDV",
+          id: index,
+          money: moneyToInt(money),
+          desc: descs
+            .filter(Boolean)
+            .map((_) => _.replace(/,/g, " ").trim())
+            .join(" "),
+          page: "_",
+        });
+      } //else console.log(rows[i], date, index, money);
+    } //else rows[i]?.length && console.log(rows[i], date, index, money);
+    i++;
+  }
+
+  // save transactions
+  saveTransactions(transactions, outputPath);
+
+  return transactions;
+}
+
+async function MTTQ_BIDV_18_19(
+  pdfPath = "./data/input/MTTQ_BIDV_18-19.pdf",
+  outputPath = "./data/output/byFile/MTTQ_BIDV_18-19"
+) {
+  const rows = await getPDF(pdfPath, outputPath);
+
+  console.log("Parsing transactions..." + rows.length);
+  const transactions = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (!Array.isArray(rows[i])) continue;
+    /*[
+        "11019/9/2024 9:24:52",
+        "5002567686xxx",
+        "200.000,00",
+        "TKThe :5002567686xxx, tai Agribank. BIDV;1261122666; vk ck Chiec Luan xin gui chut tam long nho den voi ba con mien Bac mong cho binh an va nhungdieu yeu thuong den voi toan the ba con Viet - CTLNHIDI000009908356542-1/1-CRE-002"
+    ]*/
+    const [_, index, date] =
+      rows[i]?.[0]?.match(/^(\d+)(1[0-9]\/9\/2024) (\d{1,}:\d{1,}:\d{1,})$/) ||
+      [];
+    const money =
+      [1, 2]
+        .map(
+          (j) =>
+            rows[i]?.[j]?.split(",")?.[0].match(/(\d{1,3}(?:\.\d{3})*)$/)?.[0]
+        )
+        .find((_) => _) || 0;
+    const moneyAt1 = rows[i]?.[1]?.startsWith?.(money);
+
+    if (date && index && money) {
+      const descs = moneyAt1
+        ? rows[i].slice(2)
+        : [rows[i][1], ...rows[i].slice(3)];
+      if (descs.length > 0 || money) {
+        transactions.push({
+          date: date?.replace("/9/", "/09/"),
+          bank: "BIDV",
+          id: index,
+          money: moneyToInt(money),
+          desc: descs
+            .filter(Boolean)
+            .map((_) => _.replace(/,/g, " ").trim())
+            .join(" "),
+          page: "_",
+        });
+      } //else console.log(rows[i], date, index, money);
+    } //else rows[i]?.length && console.log(rows[i], date, index, money);
+    i++;
+  }
+
+  // save transactions
+  saveTransactions(transactions, outputPath);
+
+  return transactions;
+}
+
 async function MTTQ_Agribank_9_13(
   pdfPath = "./data/input/MTTQ_Agribank_9-13.pdf",
   outputPath = "./data/output/byFile/MTTQ_Agribank_9-13"
@@ -433,6 +564,76 @@ async function CTTU_Vietinbank_13_15(
   return CTTU_Vietinbank_10_12(pdfPath, outputPath);
 }
 
+async function CTTU_Vietinbank_16(
+  pdfPath = "./data/input/CTTU_Vietinbank_16.pdf",
+  outputPath = "./data/output/byFile/CTTU_Vietinbank_16"
+) {
+  const rows = await getPDF(pdfPath, outputPath);
+
+  console.log("Parsing transactions...");
+  const transactions = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (!Array.isArray(rows[i])) continue;
+    /*
+      [
+        "9",
+        "16/09/2024 00:57:49",
+        "con mong moi nguoi binh an (CT1111); thoi gian GD:15/09/2024 23:09:00",
+        "100.000",
+        "MAI THI ANH NGOC",
+        "109882673***"
+    ]
+    [
+        "3812",
+        "16/09/2024 10:59:26",
+        "Chuyen tien den tu NAPAS Noi dung: IBFT gop chut tam long cung ba con vung lu (ct1111)",
+        "060129014***300.000",
+        "SACOMBANK"
+    ] */
+    const index = rows[i]?.[0]?.match(/\d+$/)?.[0];
+    const [_, date, time] =
+      rows[i]?.[1]?.match(/^(1[67]\/09\/2024) (\d{2}:\d{2}:\d{2})$/) || [];
+    const money = rows[i]?.[3]?.match(/(\d{1,3}(?:\.\d{3})*)/)?.[0];
+    const descInMoney = !money || money.length < rows[i]?.[3].length;
+
+    if (date && index && time) {
+      const descs = [
+        descInMoney ? null : rows[i]?.[2],
+        ...rows[i].slice(descInMoney ? 2 : 4),
+      ]
+        .filter(Boolean)
+        .map((_) => (descInMoney ? _.replace(money, "") : _));
+      // if (!moneyToInt(money)) console.log(rows[i]);
+      transactions.push({
+        date: `${date} ${time}`,
+        bank: "Vietin",
+        id: index,
+        money: moneyToInt(money),
+        desc: descs
+          .filter(Boolean)
+          .map((_) => _.replace(/,/g, " ").trim())
+          .join(" "),
+        page: "_",
+      });
+    } //else console.log(rows[i], date, index, time, money);
+    i++;
+  }
+
+  // save transactions
+  saveTransactions(transactions, outputPath);
+
+  return transactions;
+}
+
+async function CTTU_Vietinbank_17(
+  pdfPath = "./data/input/CTTU_Vietinbank_17.pdf",
+  outputPath = "./data/output/byFile/CTTU_Vietinbank_17"
+) {
+  // Cùng cấu trúc
+  return CTTU_Vietinbank_16(pdfPath, outputPath);
+}
+
 async function getPDF(pdfPath, outputPath) {
   const cacheFile = outputPath + "_cache.json";
 
@@ -467,8 +668,10 @@ function saveTransactions(data, outputPath) {
   // fs.writeFileSync(outputPath + ".json", JSON.stringify(data, null, 4));
   // console.log("Saved " + data.length + " transactions to " + outputPath + ".json");
 
+  const _data = data.map(cleanData);
+
   const csvFile = outputPath + ".csv";
-  const csv = data
+  const csv = _data
     .map(
       (t) =>
         `${t.date},${t.bank},${t.id},${t.money},${t.desc.replace(/,/g, " ")},${
@@ -477,7 +680,7 @@ function saveTransactions(data, outputPath) {
     )
     .join("\n");
   fs.writeFileSync(csvFile, "date,bank,id,money,desc,page\n" + csv);
-  console.log("Saved " + data.length + " transactions to " + csvFile);
+  console.log("Saved " + _data.length + " transactions to " + csvFile);
 
   // Compress
   console.log("Compressing...");
@@ -492,4 +695,18 @@ function saveTransactions(data, outputPath) {
 
 function log(msg) {
   process.stdout.write(msg + "\r");
+}
+
+function cleanData(_) {
+  return {
+    ..._,
+    desc: _.desc
+      .trim()
+      .replace(/\s+/g, " ") // "  " => " "
+      .replace(/^\"(.*)\"$/, "$1"), // "abc" => abc
+    // 01/09/2024 -> 1/9
+    date: _.date
+      // .replace(/0(\d\/)/g, "$1")
+      .replace("/2024", ""),
+  };
 }
